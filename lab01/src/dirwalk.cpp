@@ -36,9 +36,9 @@ void dirwalk(const std::string& directory, const Options options, bool isRoot) {
 
         bool isDotDotDir = is_dotdot_dir(entry->d_name);
 
-        if (S_ISDIR(entryStats.st_mode) && (options & OP_DIRS) ||
-            S_ISREG(entryStats.st_mode) && (options & OP_FILES) ||
-            S_ISLNK(entryStats.st_mode) && (options & OP_LINKS)) {
+        if ((S_ISDIR(entryStats.st_mode) && (options & OP_DIRS))  ||
+            (S_ISREG(entryStats.st_mode) && (options & OP_FILES)) ||
+            (S_ISLNK(entryStats.st_mode) && (options & OP_LINKS))) {
                 if (isDotDotDir == false) {
                     std::cout << entryPath << std::endl;
                 }
