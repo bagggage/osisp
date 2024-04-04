@@ -7,7 +7,7 @@
 
 #include <sys/types.h>
 
-#include "list.h"
+#include "proc_list.h"
 
 #define COUNT_OF_REPEATS 116
 #define SEC_TIMER 16116
@@ -31,7 +31,7 @@ bool flag_p = false;
 
 pid_t parent_pid;
 
-Node* head;
+ProcNode* head;
 
 void enable_stat_output();
 void disable_stat_output();
@@ -132,7 +132,7 @@ void cmd_to_stat_proc(size_t idx, bool allow_flag, bool query_flag) {
     if (count < idx) printf("There is no child process with this number.\n");
 
     size_t i = 1;
-    Node* cursor = head->next;
+    ProcNode* cursor = head->next;
 
     while(i++ != idx) cursor = cursor->next;
 
@@ -224,7 +224,7 @@ void create_proc() {
 void cmd_to_output_all_proc_stat(bool allow_flag) {
     if (head->next == NULL) return;
 
-    Node* cursor = head->next;
+    ProcNode* cursor = head->next;
 
     while(cursor != NULL) {
         if (allow_flag) {

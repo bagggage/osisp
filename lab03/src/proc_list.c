@@ -1,4 +1,4 @@
-#include "list.h"
+#include "proc_list.h"
 
 #include <assert.h>
 #include <stdio.h>
@@ -6,8 +6,8 @@
 
 #include <sys/types.h>
 
-Node* proc_list_new_node(pid_t pid) {
-    Node* new_node = (Node*)malloc(sizeof(Node));
+ProcNode* proc_list_new_node(pid_t pid) {
+    ProcNode* new_node = (ProcNode*)malloc(sizeof(ProcNode));
 
     if (new_node == NULL) {
         perror("Memory allocation failed");
@@ -20,7 +20,7 @@ Node* proc_list_new_node(pid_t pid) {
     return new_node;
 }
 
-void proc_list_push(Node** head, pid_t pid) {
+void proc_list_push(ProcNode** head, pid_t pid) {
     assert(head != NULL);
 
     if (*head == NULL) {
@@ -28,14 +28,14 @@ void proc_list_push(Node** head, pid_t pid) {
         return;
     }
 
-    Node* cursor = *head;
+    ProcNode* cursor = *head;
 
     while (cursor->next != NULL) cursor = cursor->next;
 
     cursor->next = proc_list_new_node(pid);
 }
 
-void proc_list_print(const Node* head) {
+void proc_list_print(const ProcNode* head) {
     if (head == NULL) return;
 
     printf("Parent PID: %d\n", head->pid);
@@ -48,13 +48,13 @@ void proc_list_print(const Node* head) {
     }
 }
 
-pid_t proc_list_pop(Node** head) {
+pid_t proc_list_pop(ProcNode** head) {
     assert(head != NULL);
 
     if (*head == NULL) return -1;
 
-    Node* cursor = *head;
-    Node* prev = NULL;
+    ProcNode* cursor = *head;
+    ProcNode* prev = NULL;
 
     while (cursor->next != NULL) {
         prev = cursor;
@@ -74,9 +74,9 @@ pid_t proc_list_pop(Node** head) {
     return pid;
 }
 
-void proc_list_clear(Node** head) {
+void proc_list_clear(ProcNode** head) {
     while (*head != NULL) {
-        Node* temp = *head;
+        ProcNode* temp = *head;
         *head = (*head)->next;
 
         free(temp);

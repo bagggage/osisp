@@ -5,27 +5,25 @@ LDFLAGS=-g
 SRC=src
 BUILD=build
 DIST=bin
-PROG_NAME=parent
+PROG_NAME=lab
 TARGET=$(DIST)/$(PROG_NAME)
 
 SRCS=$(shell find $(SRC) -name '*.c')
 OBJS=$(patsubst $(SRC)/%.c, $(BUILD)/%.o, $(SRCS))
-
-all: $(PROG_NAME)
 
 $(OBJS): $(SRCS)
 	@mkdir -p $(@D)
 	@echo $@
 	@$(CXX) $(CPPFLAGS) -o $@ -c $(patsubst $(BUILD)/%.o, $(SRC)/%.c, $@)
 
-$(TARGET):
+$(TARGET): $(OBJS)
 	@mkdir -p $(@D)
-	$(CXX) $(LDFLAGS) -o $@ $(C_OBJS)
+	$(CXX) $(LDFLAGS) -o $@ $(OBJS)
 
 all: $(TARGET)
 
 run: all
-	./$(TARGET) environment.txt
+	./$(TARGET)
 
 clean:
 	$(RM) $(OBJS)
