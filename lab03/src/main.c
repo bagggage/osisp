@@ -1,254 +1,298 @@
-#include <signal.h>
-#include <stdbool.h>
-#include <stdlib.h>
+#define _GNU_SOURCE
+
 #include <stdio.h>
-#include <time.h>
+#include <stdlib.h>
+#include <stdbool.h>
+#include <string.h>
+#include <signal.h>
 #include <unistd.h>
 
 #include <sys/types.h>
+#include <sys/wait.h>
 
 #include "proc_list.h"
 
-#define COUNT_OF_REPEATS 116
-#define SEC_TIMER 16116
-#define ARR_SIZE 4
-#define SEC_FOR_PREFF_G 5
+#define CMD_BUFFER_SIZE 32
+#define COUNT_OF_REPEATS 3
+#define SEC_TIMER 1
+#define INTERRUPT_DELAY 5
 
 typedef struct Pair {
     int first;
     int second;
 } Pair;
 
-size_t count = 0;
-size_t size = 0;
+typedef struct Stats {
+    Pair pairs[256];
 
-Pair stats[COUNT_OF_REPEATS];
+    unsigned int size;
+    unsigned int ones_count;
+    unsigned int one_zero_count;
+    unsigned int zero_one_count;
+    unsigned int zeroes_count;
+} Stats;
+
+bool block_allow_output = false;
+
+Stats stats;
 Pair val_stat;
 
-bool is_need_to_contrinue = true;
-bool is_need_to_collect = true;
-bool flag_p = false;
+ProcNode* proc_list;
+size_t proc_count = 0;
 
-pid_t parent_pid;
-
-ProcNode* head;
-
-void enable_stat_output();
-void disable_stat_output();
-
+// Child functions
 void output_stat();
-void take_stat();
-void make_stat();
+void child_task();
 
-// Proc
+// Processes operations
 void create_proc();
 void clear_child_proc();
 void remove_last_proc();
 
-// Signals
-void cmd_to_stat_proc(size_t idx, bool allow_flag, bool query_flag);
-void cmd_to_output_all_proc_stat(bool allow_flag);
+// Signal senders
+void allow_child_output(size_t idx, bool allow_flag, bool query_flag);
+void allow_childs_output(bool allow_flag);
 
-void allow_all_after_p();
+// Signal handlers
+void allow_output_handler();
+void enable_stat_output();
+void disable_stat_output();
+void interrupt_handler();
+void parent_exit();
+
+void read_command(char* cmd) {
+    int i = 0;
+    while ((cmd[i] = getchar()) != '\n') {
+        i++;
+
+        if (i > 3) {
+            cmd[2] = '\0';
+            i = 0;
+            break;
+        }
+    }
+    cmd[i] = '\0';
+}
+
+void kill_childs() {
+    ProcNode* curr_proc = proc_list->next;
+
+    while (curr_proc != NULL) {
+        kill(curr_proc->pid, SIGKILL);
+        curr_proc = curr_proc->next;
+    }
+}
+
+void parent_exit() {
+    kill_childs();
+    proc_list_clear(&proc_list);
+
+    exit(0);
+}
 
 int main() {
-    int idx = 0;
-
-    signal(SIGINT, output_stat);
-    signal(SIGUSR1, enable_stat_output);
-    signal(SIGUSR2, disable_stat_output);
+    char command[CMD_BUFFER_SIZE] = { '\0' };
 
     bool flag_continue = true;
 
-    parent_pid = getpid();
-    proc_list_push(&head, parent_pid);
+    proc_list_push(&proc_list, getpid());
+
+    printf("Enter operation: ");
+
+    signal(SIGINT, parent_exit);
+    signal(SIGALRM, allow_output_handler);
+    signal(SIGUSR1, enable_stat_output);
+    signal(SIGUSR2, disable_stat_output);
 
     do {
-        int c = getchar();
+        read_command(command);
 
-        switch(c) {
-        case '+': create_proc(); break;
-        case '-': remove_last_proc(); break;
-        case 'l': proc_list_print(head); break;
-        case 'k': clear_child_proc(); break;
-        case 's': {
-            printf("Enter 0 for all processes, or another number for <num> process: ");
-            scanf("%d", &idx);
+        if (!strcmp(command, "+")) create_proc();
+        else if (!strcmp(command, "-")) remove_last_proc();
+        else if (!strcmp(command, "l")) proc_list_print(proc_list);
+        else if (!strcmp(command, "k")) clear_child_proc();
+        else if (!strcmp(command, "s")) allow_childs_output(false);
+        else if (!strcmp(command, "g")) allow_childs_output(true);
+        else if (!strcmp(command, "q")) break;
+        else {
+            unsigned int idx = 0;
 
-            if (idx == 0) {
-                cmd_to_output_all_proc_stat(false);
-            }
-            else {
-                cmd_to_stat_proc(idx, false, false);
-            }
-
-            break;
-        }
-        case 'g': {
-            flag_p = false;
-
-            printf("Enter 0 for all processes, or another number for <num> process: ");
-            scanf("%d", &idx);
-
-            if (idx == 0) {
-                cmd_to_output_all_proc_stat(true);
-            }
-            else {
-                cmd_to_stat_proc(idx, true, false);
-            }
-
-            break;
-        }
-        case 'p': {
-            cmd_to_output_all_proc_stat(false);
-
-            printf("Enter the number of the process that will display statistics: ");
-            scanf("%d", &idx);
-
-            cmd_to_stat_proc(idx, true, true);
-
-            flag_p = true;
-
-            signal(SIGALRM, allow_all_after_p);
-            alarm(SEC_FOR_PREFF_G);
-
-            break;
-        }
-        case 'q': { clear_child_proc(), flag_continue = false; break; }
-        //add wait for zombie_process
-        default: flag_continue = false; break;
+            if (sscanf(command, "s %u", &idx) == 1) allow_child_output(idx, false, false);
+            else if (sscanf(command, "g %u", &idx) == 1) allow_child_output(idx, true, false);
+            else if (sscanf(command, "p %u", &idx) == 1) allow_child_output(idx, true, true);
+            else puts("Unknown command\n");
         }
 
-        getchar();
     } while(flag_continue);
 
-    //free memory from list
-    proc_list_clear(&head);
-
-    return 0;
+    parent_exit();
 }
 
-void cmd_to_stat_proc(size_t idx, bool allow_flag, bool query_flag) {
-    if (count < idx) printf("There is no child process with this number.\n");
+void allow_child_output(size_t idx, bool allow_flag, bool query_flag) {
+    if (proc_count < idx || idx == 0) {
+        printf("There is no child process with this number.\n");
+        return;
+    }
 
     size_t i = 1;
-    ProcNode* cursor = head->next;
+    ProcNode* cursor = proc_list->next;
 
     while(i++ != idx) cursor = cursor->next;
 
     if (query_flag) {
+        block_allow_output = false;
+
         kill(cursor->pid, SIGINT);
+        alarm(INTERRUPT_DELAY);
+
         return;
     }
 
-    if (allow_flag) kill(cursor->pid, SIGUSR1);
-
-    kill(cursor->pid, SIGUSR2);
+    kill(cursor->pid, allow_flag ? SIGUSR1 : SIGUSR2);
 }
 
+bool is_can_output = true;
+
 void enable_stat_output() {
-    is_need_to_collect = true;
+    is_can_output = true;
 }
 
 void disable_stat_output() {
-    is_need_to_collect = false;
+    is_can_output = false;
 }
 
 void output_stat() {
-    printf("Statistic of child process with PID = %d, PPID = %d All values: ", getpid(), getppid());
+    fprintf(stdout, "Stats of child: PID = %d, PPID = %d, Pairs: {0,0} - %u, {0,1} - %u, {1,0} - %u, {1,1} - %u",
+        getpid(), getppid(), stats.zeroes_count, stats.zero_one_count, stats.one_zero_count, stats.ones_count);
 
-    for (size_t i = 0; i < ARR_SIZE; ++i) {
-        printf("{%d, %d} ", stats[i].first, stats[i].second);
-    }
-
-    printf("\n");
-}
-
-void take_stat() {
-    stats[size].first = val_stat.first;
-    stats[size++].second = val_stat.second;
-
-    is_need_to_contrinue = false;
+    fputc('\n', stdout);
 }
 
 void remove_last_proc() {
-    if (head->next == NULL) {
+    if (proc_list->next == NULL) {
         printf("No child processes.\n");
         return;
     }
 
-    pid_t pid = proc_list_pop(&head);
+    pid_t pid = proc_list_pop(&proc_list);
     kill(pid, SIGKILL);
 
-    printf("Child process with PID = %d successfully deleted.\n", pid);
-    printf("Remaining number of child processes: %lu\n", --count);
+    printf("Removed child: PID = %d\n", pid);
+    printf("Number of childs: %lu\n", --proc_count);
 }
 
-void make_stat() {
-    do {
-        for (size_t i = 0; i < COUNT_OF_REPEATS; ++i) {
-            if (size == ARR_SIZE) size = 0;
+bool is_need_to_interrupt = false;
 
-            ualarm(SEC_TIMER, 0);
+void alarm_handler() {
+    is_need_to_interrupt = true;
 
-            size_t j = 0;
+    if (val_stat.first % 2) {
+        if (val_stat.second % 2) stats.ones_count++;
+        else stats.one_zero_count++;
+    }
+    else {
+        if (val_stat.second % 2) stats.zero_one_count++;
+        else stats.zeroes_count++;
+    }
 
-            do {
-                val_stat.first = j % 2;
-                val_stat.second = j % 2;
-                j++;
-            } while (is_need_to_contrinue);
+    stats.pairs[stats.size].first = val_stat.first;
+    stats.pairs[stats.size++].second = val_stat.second;
+}
 
-            is_need_to_contrinue = true;
+void interrupt_handler() {
+    output_stat();
+}
+
+void clear_stats() {
+    stats.size = 0;
+    stats.ones_count = 0;
+    stats.one_zero_count = 0;
+    stats.zero_one_count = 0;
+    stats.zeroes_count = 0;
+}
+
+void child_task() {
+    clear_stats();
+
+    val_stat.first = 0;
+    val_stat.second = 0;
+
+    unsigned int i = 0;
+
+    while (1) {
+        if (i == COUNT_OF_REPEATS) {
+            i = 0;
+
+            if (is_can_output) output_stat();
+
+            clear_stats();
         }
 
-        if (is_need_to_collect) output_stat();
-    } while(1);
+        alarm(SEC_TIMER);
+
+        while (!is_need_to_interrupt) {
+            if (val_stat.first) {
+                if (val_stat.second) { val_stat = (Pair){ 0, 0 }; }
+                else { val_stat = (Pair){ 1, 1 }; }
+            }
+            else {
+                if (val_stat.second) { val_stat = (Pair){ 1, 0 }; }
+                else { val_stat = (Pair){ 0, 1 }; }
+            }
+        }
+
+        is_need_to_interrupt = false;
+
+        i++;
+    }
+
+    exit(0);
 }
 
 void create_proc() {
     pid_t pid = fork();
 
     if (pid == 0) {
-        signal(SIGALRM, take_stat);
-        make_stat();
+        signal(SIGALRM, alarm_handler);
+        signal(SIGINT, interrupt_handler);
+
+        child_task();
     }
     else if (pid > 0) {
-        proc_list_push(&head, pid);
-        count++;
-        
-        printf("Child process with PID = %d spawned successfully.\n", pid);
+        proc_list_push(&proc_list, pid);
+        proc_count++;
+
+        printf("Added child: PID = %d\n", pid);
     }
 }
 
-void cmd_to_output_all_proc_stat(bool allow_flag) {
-    if (head->next == NULL) return;
+void allow_childs_output(bool allow_flag) {
+    block_allow_output = !allow_flag;
 
-    ProcNode* cursor = head->next;
+    if (proc_list->next == NULL) return;
 
-    while(cursor != NULL) {
-        if (allow_flag) {
-            kill(cursor->pid, SIGUSR1);
-        }
-        else {
-            kill(cursor->pid, SIGUSR2);
-        }
+    ProcNode* curr_proc = proc_list->next;
 
-        cursor = cursor->next;
+    const unsigned int signal = allow_flag ? SIGUSR1 : SIGUSR2;
+
+    while(curr_proc != NULL) {
+        kill(curr_proc->pid, signal);
+
+        curr_proc = curr_proc->next;
     }
 }
 
 void clear_child_proc() {
-    while (head->next) {
-        pid_t pid = proc_list_pop(&head);
+    while (proc_list->next) {
+        pid_t pid = proc_list_pop(&proc_list);
         kill(pid, SIGKILL);
 
-        count--;
+        proc_count--;
     }
     
     printf("All child processes are deleted.\n");
 }
 
-void allow_all_after_p() {
-    if (flag_p == true) cmd_to_output_all_proc_stat(true);
+void allow_output_handler() {
+    if (block_allow_output == false) allow_childs_output(true);
 }

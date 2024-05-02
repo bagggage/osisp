@@ -44,7 +44,7 @@ void proc_list_print(const ProcNode* head) {
 
     while (head->next != NULL) {
         head = head->next;
-        printf("Child%lu PID: %d\n", ++childIndex, head->pid);
+        printf("|---Child_%lu PID: %d\n", childIndex++, head->pid);
     }
 }
 
