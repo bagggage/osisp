@@ -13,9 +13,9 @@ OBJS=$(patsubst $(SRC)/%.cpp, $(BUILD)/%.o, $(SRCS))
 all: $(PROG_NAME)
 
 $(OBJS): $(SRCS)
-	mkdir -p $(@D)
-	@echo > $@
-	$(CXX) $(CPPFLAGS) -o $@ -c $(patsubst $(BUILD)/%.o, $(SRC)/%.cpp, $@)
+	@mkdir -p $(@D)
+	@echo $@
+	@$(CXX) $(CPPFLAGS) -o $@ -c $(patsubst $(BUILD)/%.o, $(SRC)/%.cpp, $@)
 
 $(PROG_NAME): $(OBJS)
 	mkdir -p $(DIST)
