@@ -31,6 +31,8 @@ static inline pid_t safe_pthread_create(void* (*entry_point)(void*), void* arg) 
         exit(-3);
     }
 
+    pthread_detach(thread);
+
     return thread;
 }
 
