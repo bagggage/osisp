@@ -10,7 +10,7 @@ SRC_APP=${SRC}/${PROG_NAME}
 BUILD_APP=${BUILD}/${PROG_NAME}
 OUT=${DIST}/${PROG_NAME}
 
-CC_INCLUDE:=-I${SRC_APP}
+CC_INCLUDE:=-I${SRC_APP} -Iinclude
 
 SRCS:=$(shell find ${SRC_APP} -name '*.c')
 OBJS:=$(patsubst ${SRC_APP}/%.c, ${BUILD_APP}/%.o, ${SRCS})
@@ -21,10 +21,10 @@ ${OBJS}: ${SRCS}
 
 bin: ${OBJS}
 	@echo Linking: ${PROG_NAME}
-	@mkdir -p @{DIST}
+	@mkdir -p ${DIST}
 	@${CC} -o ${OUT} ${OBJS}
 
-PROGS_DIR:=${shell find -maxdepth 1 -type d -not -path . -printf '%f\n'}
+PROGS_DIR:=${shell find ./src -maxdepth 1 -type d -not -path . -printf '%f\n'}
 
 all:
 	@for dir in ${PROGS_DIR}; do make -s bin PROG_NAME=$${dir}; done
